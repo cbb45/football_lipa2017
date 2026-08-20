@@ -253,7 +253,7 @@ export default function Dashboard({ eventData, onSelectEvent, onSignOut, onNavig
           </span>
         </div>
 
-        <div className="w-full max-w-4xl">
+               <div className="w-full">
           {months.map((month) => (
             <MonthRow
               key={month.name}
