@@ -6,35 +6,23 @@ import EventDetail from "./components/EventDetail";
 import History from "./components/History";
 
 export default function App() {
-  const [session, setSession] = useState(null);
-  const [loadingSession, setLoadingSession] = useState(true);
+  const [signedIn, setSignedIn] = useState(
+    localStorage.getItem("footballLipaSignedIn") === "true"
+  );
   const [screen, setScreen] = useState("dashboard");
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [eventData, setEventData] = useState({});
   const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoadingSession(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
+    if (!signedIn) {
+      setLoading(false);
+      return;
+    }
 
     const loadData = async () => {
-      const { data: events } = await supabase
-        .from("events")
-        .select("*")
-        .eq("user_id", session.user.id);
-
+      const { data: events } = await supabase.from("events").select("*");
       const eventMap = {};
       (events || []).forEach((e) => {
         eventMap[e.date_key] = {
@@ -48,7 +36,6 @@ export default function App() {
       const { data: historyRows } = await supabase
         .from("history")
         .select("*")
-        .eq("user_id", session.user.id)
         .order("created_at", { ascending: false });
 
       setHistory(
@@ -61,16 +48,16 @@ export default function App() {
           timestamp: h.created_at,
         }))
       );
+      setLoading(false);
     };
 
     loadData();
-  }, [session]);
+  }, [signedIn]);
 
   const logHistory = async (entry) => {
     const { data } = await supabase
       .from("history")
       .insert({
-        user_id: session.user.id,
         type: entry.type,
         date_key: entry.dateKey,
         status: entry.status,
@@ -94,6 +81,11 @@ export default function App() {
     }
   };
 
+  const handleSignIn = () => {
+    localStorage.setItem("footballLipaSignedIn", "true");
+    setSignedIn(true);
+  };
+
   const handleSelectEvent = (event) => {
     setSelectedEvent(event);
     logHistory({ type: "opened", dateKey: event.date });
@@ -103,14 +95,13 @@ export default function App() {
   const handleSaveEvent = async (dateKey, roster, status, playerCount) => {
     await supabase.from("events").upsert(
       {
-        user_id: session.user.id,
         date_key: dateKey,
         roster,
         status,
         player_count: playerCount,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id,date_key" }
+      { onConflict: "date_key" }
     );
 
     setEventData((prev) => ({
@@ -121,8 +112,9 @@ export default function App() {
     setScreen("dashboard");
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
+  const handleSignOut = () => {
+    localStorage.removeItem("footballLipaSignedIn");
+    setSignedIn(false);
     setSelectedEvent(null);
     setScreen("dashboard");
   };
@@ -132,16 +124,16 @@ export default function App() {
   };
 
   const handleClearHistory = async () => {
-    await supabase.from("history").delete().eq("user_id", session.user.id);
+    await supabase.from("history").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     setHistory([]);
   };
 
-  if (loadingSession) {
-    return <div className="min-h-screen bg-gray-50" />;
+  if (!signedIn) {
+    return <Welcome onSignIn={handleSignIn} />;
   }
 
-  if (!session) {
-    return <Welcome />;
+  if (loading) {
+    return <div className="min-h-screen bg-gray-50" />;
   }
 
   if (screen === "eventDetail" && selectedEvent) {

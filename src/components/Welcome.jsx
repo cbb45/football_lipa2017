@@ -1,28 +1,17 @@
 import { useState } from "react";
-import { supabase } from "../lib/supabase";
 
-export default function Welcome() {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState("idle");
-  const [errorMessage, setErrorMessage] = useState("");
+const ADMIN_PASSWORD = "bossapril2026"; // change this to whatever you want
 
-  const handleSubmit = async (e) => {
+export default function Welcome({ onSignIn }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setStatus("sending");
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: window.location.origin,
-      },
-    });
-
-    if (error) {
-      console.error("Supabase auth error:", error);
-      setErrorMessage(error.message);
-      setStatus("error");
+    if (password === ADMIN_PASSWORD) {
+      onSignIn();
     } else {
-      setStatus("sent");
+      setError("Incorrect password");
     }
   };
 
@@ -45,38 +34,28 @@ export default function Welcome() {
           />
         </div>
 
-        {status === "sent" ? (
-          <div className="text-center">
-            <p className="text-sm text-gray-700 font-medium">Check your email</p>
-            <p className="text-xs text-gray-500 mt-1">
-              We sent a sign-in link to {email}
-            </p>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter email"
-              disabled={status === "sending"}
-              className="w-full rounded-md bg-gray-100 border-none px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-400"
-            />
-            <button
-              type="submit"
-              disabled={status === "sending"}
-              className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2.5 rounded-md transition-colors disabled:opacity-60"
-            >
-              {status === "sending" ? "Sending link..." : "Sign Up"}
-            </button>
-            {status === "error" && (
-              <p className="text-xs text-red-600 text-center">
-                {errorMessage || "Something went wrong. Try again."}
-              </p>
-            )}
-          </form>
-        )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError("");
+            }}
+            placeholder="Enter admin password"
+            className="w-full rounded-md bg-gray-100 border-none px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-400"
+          />
+          <button
+            type="submit"
+            className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2.5 rounded-md transition-colors"
+          >
+            Sign In
+          </button>
+          {error && (
+            <p className="text-xs text-red-600 text-center">{error}</p>
+          )}
+        </form>
       </div>
     </div>
   );
