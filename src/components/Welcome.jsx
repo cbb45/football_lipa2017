@@ -1,29 +1,28 @@
 import { useState } from "react";
-import { sendSignInLinkToEmail } from "firebase/auth";
-import { auth } from "../lib/firebase";
+import { supabase } from "../lib/supabase";
 
 export default function Welcome() {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState("idle"); // idle | sending | sent | error
+  const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus("sending");
 
-    const actionCodeSettings = {
-      url: window.location.origin,
-      handleCodeInApp: true,
-    };
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
+    });
 
-    try {
-      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
-      window.localStorage.setItem("emailForSignIn", email);
-      setStatus("sent");
-    } catch (err) {
-      console.error("Firebase auth error:", err);
-      setErrorMessage(err.message);
+    if (error) {
+      console.error("Supabase auth error:", error);
+      setErrorMessage(error.message);
       setStatus("error");
+    } else {
+      setStatus("sent");
     }
   };
 

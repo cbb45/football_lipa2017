@@ -1,24 +1,12 @@
 import { useState, useEffect } from "react";
-import { onAuthStateChange, isSignInLink, completeSignIn } from "./lib/authHelpers";
-import { auth, db } from "./lib/firebase";
-import {
-  collection,
-  doc,
-  getDocs,
-  setDoc,
-  addDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-} from "firebase/firestore";
+import { supabase } from "./lib/supabase";
 import Welcome from "./components/Welcome";
 import Dashboard from "./components/Dashboard";
 import EventDetail from "./components/EventDetail";
 import History from "./components/History";
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [screen, setScreen] = useState("dashboard");
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -26,90 +14,84 @@ export default function App() {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
-    if (isSignInLink(window.location.href)) {
-      let email = window.localStorage.getItem("emailForSignIn");
-      if (!email) {
-        email = window.prompt("Please confirm your email for sign-in");
-      }
-      completeSignIn(email, window.location.href).then(() => {
-        window.localStorage.removeItem("emailForSignIn");
-        window.history.replaceState({}, document.title, window.location.pathname);
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChange((currentUser) => {
-      setUser(currentUser);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
       setLoadingSession(false);
     });
-    return unsubscribe;
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!session) return;
 
     const loadData = async () => {
-      const eventsSnap = await getDocs(
-        query(collection(db, "events"), where("userId", "==", user.uid))
-      );
+      const { data: events } = await supabase
+        .from("events")
+        .select("*")
+        .eq("user_id", session.user.id);
+
       const eventMap = {};
-      eventsSnap.forEach((docSnap) => {
-        const d = docSnap.data();
-        eventMap[d.dateKey] = {
-          roster: d.roster,
-          status: d.status,
-          playerCount: d.playerCount,
+      (events || []).forEach((e) => {
+        eventMap[e.date_key] = {
+          roster: e.roster,
+          status: e.status,
+          playerCount: e.player_count,
         };
       });
       setEventData(eventMap);
 
-      const historySnap = await getDocs(
-        query(
-          collection(db, "history"),
-          where("userId", "==", user.uid),
-          orderBy("createdAt", "desc")
-        )
-      );
+      const { data: historyRows } = await supabase
+        .from("history")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false });
+
       setHistory(
-        historySnap.docs.map((docSnap) => {
-          const d = docSnap.data();
-          return {
-            id: docSnap.id,
-            type: d.type,
-            dateKey: d.dateKey,
-            status: d.status,
-            playerCount: d.playerCount,
-            timestamp: d.createdAt,
-          };
-        })
+        (historyRows || []).map((h) => ({
+          id: h.id,
+          type: h.type,
+          dateKey: h.date_key,
+          status: h.status,
+          playerCount: h.player_count,
+          timestamp: h.created_at,
+        }))
       );
     };
 
     loadData();
-  }, [user]);
+  }, [session]);
 
   const logHistory = async (entry) => {
-    const docRef = await addDoc(collection(db, "history"), {
-      userId: user.uid,
-      type: entry.type,
-      dateKey: entry.dateKey,
-      status: entry.status || null,
-      playerCount: entry.playerCount ?? null,
-      createdAt: new Date().toISOString(),
-    });
-
-    setHistory((prev) => [
-      {
-        id: docRef.id,
+    const { data } = await supabase
+      .from("history")
+      .insert({
+        user_id: session.user.id,
         type: entry.type,
-        dateKey: entry.dateKey,
+        date_key: entry.dateKey,
         status: entry.status,
-        playerCount: entry.playerCount,
-        timestamp: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+        player_count: entry.playerCount,
+      })
+      .select()
+      .single();
+
+    if (data) {
+      setHistory((prev) => [
+        {
+          id: data.id,
+          type: data.type,
+          dateKey: data.date_key,
+          status: data.status,
+          playerCount: data.player_count,
+          timestamp: data.created_at,
+        },
+        ...prev,
+      ]);
+    }
   };
 
   const handleSelectEvent = (event) => {
@@ -119,15 +101,17 @@ export default function App() {
   };
 
   const handleSaveEvent = async (dateKey, roster, status, playerCount) => {
-    const docId = `${user.uid}_${dateKey}`;
-    await setDoc(doc(db, "events", docId), {
-      userId: user.uid,
-      dateKey,
-      roster,
-      status,
-      playerCount,
-      updatedAt: new Date().toISOString(),
-    });
+    await supabase.from("events").upsert(
+      {
+        user_id: session.user.id,
+        date_key: dateKey,
+        roster,
+        status,
+        player_count: playerCount,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,date_key" }
+    );
 
     setEventData((prev) => ({
       ...prev,
@@ -138,7 +122,7 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
-    await auth.signOut();
+    await supabase.auth.signOut();
     setSelectedEvent(null);
     setScreen("dashboard");
   };
@@ -148,10 +132,7 @@ export default function App() {
   };
 
   const handleClearHistory = async () => {
-    const historySnap = await getDocs(
-      query(collection(db, "history"), where("userId", "==", user.uid))
-    );
-    await Promise.all(historySnap.docs.map((d) => deleteDoc(d.ref)));
+    await supabase.from("history").delete().eq("user_id", session.user.id);
     setHistory([]);
   };
 
@@ -159,7 +140,7 @@ export default function App() {
     return <div className="min-h-screen bg-gray-50" />;
   }
 
-  if (!user) {
+  if (!session) {
     return <Welcome />;
   }
 

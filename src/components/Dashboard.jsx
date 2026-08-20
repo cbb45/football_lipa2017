@@ -1,13 +1,5 @@
 import { useState } from "react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  Clock,
-  MapPin,
-  CheckCircle2,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Clock, MapPin, CheckCircle2, XCircle } from "lucide-react";
 import { getSaturdaysInMonth, toDateKey } from "../utils/dates";
 
 const MONTH_NAMES = [
@@ -15,44 +7,55 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-// ------------------------------------------------------------
-// Build months from August 2026 onwards
-// ------------------------------------------------------------
-function buildMonths(year, rosters) {
-  // Determine which months to show for this year
-  let monthIndices;
-  if (year === 2026) {
-    // Only August (index 7) through December (index 11)
-    monthIndices = [7, 8, 9, 10, 11];
-  } else if (year > 2026) {
-    // All months (0 to 11)
-    monthIndices = Array.from({ length: 12 }, (_, i) => i);
-  } else {
-    // Years before 2026 – should not happen because we disable the left arrow
-    return [];
-  }
+const SEASON_START = new Date(2026, 7, 22); // August 22, 2026
 
-  return monthIndices.map((monthIndex) => {
-    const name = MONTH_NAMES[monthIndex];
-    const saturdays = getSaturdaysInMonth(year, monthIndex);
+function buildMonths(year, eventData) {
+  const startMonthIndex = year === 2026 ? 7 : 0; // August = index 7
+
+  return MONTH_NAMES.slice(startMonthIndex).map((name) => {
+    const monthIndex = MONTH_NAMES.indexOf(name);
+    let saturdays = getSaturdaysInMonth(year, monthIndex);
+
+    // Trim to only Saturdays on/after August 22, 2026
+    if (year === 2026 && monthIndex === 7) {
+      saturdays = saturdays.filter((d) => d >= SEASON_START);
+    }
+
     const events = saturdays.map((date) => {
       const dateKey = toDateKey(date);
+      const data = eventData[dateKey];
       return {
         id: dateKey,
         date: dateKey,
         title: "Open Play Football",
         time: "6:00 pm - 8:00 pm",
         location: "Aboitiz Pitch",
-        hasRoster: Boolean(rosters[dateKey]),
+        status: data?.status || "scheduled",
+        playerCount: data?.playerCount ?? 0,
       };
     });
     return { name, events };
   });
 }
 
-// ------------------------------------------------------------
-// EventCard – unchanged
-// ------------------------------------------------------------
+function StatusBadge({ status }) {
+  if (status === "happened") {
+    return (
+      <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+        <CheckCircle2 size={12} /> Happened
+      </span>
+    );
+  }
+  if (status === "cancelled") {
+    return (
+      <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
+        <XCircle size={12} /> Cancelled
+      </span>
+    );
+  }
+  return <span className="text-xs text-gray-400">Scheduled</span>;
+}
+
 function EventCard({ event, onClick }) {
   const formattedDate = new Date(event.date).toLocaleDateString("en-US", {
     month: "short",
@@ -64,7 +67,15 @@ function EventCard({ event, onClick }) {
       onClick={onClick}
       className="relative bg-white rounded-lg border border-gray-100 shadow-sm pl-4 pr-4 py-3 overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
     >
-      <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-l-lg" />
+      <div
+        className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${
+          event.status === "cancelled"
+            ? "bg-red-500"
+            : event.status === "happened"
+            ? "bg-green-500"
+            : "bg-blue-600"
+        }`}
+      />
       <div className="flex justify-between items-start">
         <h4 className="font-semibold text-blue-700 text-sm">{event.title}</h4>
         <span className="text-xs text-gray-400">{formattedDate}</span>
@@ -76,60 +87,67 @@ function EventCard({ event, onClick }) {
         <span>{event.location}</span>
       </div>
       <div className="border-t border-gray-100 mt-3 pt-2 flex justify-between items-center">
-        {event.hasRoster ? (
-          <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
-            <CheckCircle2 size={12} /> Roster set
-          </span>
-        ) : (
-          <span className="text-xs text-gray-400">No roster yet</span>
-        )}
+        <StatusBadge status={event.status} />
+        <span className="text-xs text-gray-500 font-medium">
+          {event.playerCount} player{event.playerCount !== 1 ? "s" : ""}
+        </span>
       </div>
     </div>
   );
 }
 
-// ------------------------------------------------------------
-// MonthSection – unchanged
-// ------------------------------------------------------------
-function MonthSection({ month, onSelectEvent }) {
-  const [open, setOpen] = useState(true);
+function MonthRow({ month, isOpen, onToggle, onSelectEvent }) {
   return (
-    <div className="mb-4">
+    <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden mb-3">
       <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 py-2 text-left"
+        onClick={onToggle}
+        className={`w-full flex items-center justify-between px-5 py-4 text-left transition-colors ${
+          isOpen ? "bg-red-50" : "hover:bg-gray-50"
+        }`}
       >
-        <span className="font-semibold text-gray-700 text-sm">{month.name}</span>
-        <span className="text-xs bg-red-100 text-red-600 rounded-full px-2 py-0.5">
-          {month.events.length} Event{month.events.length !== 1 ? "s" : ""}
-        </span>
-        <span className="ml-auto text-gray-400">
-          {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="font-semibold text-gray-800">{month.name}</span>
+          <span className="text-xs bg-red-100 text-red-600 rounded-full px-2 py-0.5">
+            {month.events.length} Event{month.events.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        <ChevronDown
+          size={18}
+          className={`text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+        />
       </button>
-      {open && month.events.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
-          {month.events.map((event) => (
-            <EventCard
-              key={event.id}
-              event={event}
-              onClick={() => onSelectEvent(event)}
-            />
-          ))}
+
+      {isOpen && (
+        <div className="px-5 pb-5 pt-1 border-t border-gray-100">
+          {month.events.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+              {month.events.map((event) => (
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  onClick={() => onSelectEvent(event)}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 mt-4">No Saturdays scheduled this month.</p>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-// ------------------------------------------------------------
-// Main Dashboard
-// ------------------------------------------------------------
 export default function Dashboard({ eventData, onSelectEvent, onSignOut, onNavigate, activeTab }) {
   const [currentYear, setCurrentYear] = useState(2026);
-  const navItems = ["Open Play Session","History of Boss April"];
+  const [openMonth, setOpenMonth] = useState("August");
+  const navItems = ["Open Play Session", "Open Play Sessions", "History of Boss April"];
 
   const months = buildMonths(currentYear, eventData);
+
+  const handleToggleMonth = (name) => {
+    setOpenMonth((prev) => (prev === name ? null : name));
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -183,9 +201,17 @@ export default function Dashboard({ eventData, onSelectEvent, onSignOut, onNavig
           </span>
         </div>
 
-        {months.map((month) => (
-          <MonthSection key={month.name} month={month} onSelectEvent={onSelectEvent} />
-        ))}
+        <div className="max-w-4xl">
+          {months.map((month) => (
+            <MonthRow
+              key={month.name}
+              month={month}
+              isOpen={openMonth === month.name}
+              onToggle={() => handleToggleMonth(month.name)}
+              onSelectEvent={onSelectEvent}
+            />
+          ))}
+        </div>
       </main>
     </div>
   );
