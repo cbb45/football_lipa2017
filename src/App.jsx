@@ -1,47 +1,115 @@
 import { useState, useEffect } from "react";
+import { onAuthStateChange, isSignInLink, completeSignIn } from "./lib/authHelpers";
+import { auth, db } from "./lib/firebase";
+import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  addDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+} from "firebase/firestore";
 import Welcome from "./components/Welcome";
 import Dashboard from "./components/Dashboard";
 import EventDetail from "./components/EventDetail";
 import History from "./components/History";
 
-const STORAGE_KEY = "footballLipa";
-
-function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { signedIn: false, eventData: {}, history: [] };
-    return JSON.parse(raw);
-  } catch {
-    return { signedIn: false, eventData: {}, history: [] };
-  }
-}
-
-function saveToStorage(state) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
 export default function App() {
-  const initial = loadFromStorage();
-  const [signedIn, setSignedIn] = useState(initial.signedIn);
+  const [user, setUser] = useState(null);
+  const [loadingSession, setLoadingSession] = useState(true);
   const [screen, setScreen] = useState("dashboard");
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [eventData, setEventData] = useState(initial.eventData);
-  const [history, setHistory] = useState(initial.history);
+  const [eventData, setEventData] = useState({});
+  const [history, setHistory] = useState([]);
 
-  // Persist to localStorage whenever any of this changes
   useEffect(() => {
-    saveToStorage({ signedIn, eventData, history });
-  }, [signedIn, eventData, history]);
+    if (isSignInLink(window.location.href)) {
+      let email = window.localStorage.getItem("emailForSignIn");
+      if (!email) {
+        email = window.prompt("Please confirm your email for sign-in");
+      }
+      completeSignIn(email, window.location.href).then(() => {
+        window.localStorage.removeItem("emailForSignIn");
+        window.history.replaceState({}, document.title, window.location.pathname);
+      });
+    }
+  }, []);
 
-  const logHistory = (entry) => {
+  useEffect(() => {
+    const unsubscribe = onAuthStateChange((currentUser) => {
+      setUser(currentUser);
+      setLoadingSession(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadData = async () => {
+      const eventsSnap = await getDocs(
+        query(collection(db, "events"), where("userId", "==", user.uid))
+      );
+      const eventMap = {};
+      eventsSnap.forEach((docSnap) => {
+        const d = docSnap.data();
+        eventMap[d.dateKey] = {
+          roster: d.roster,
+          status: d.status,
+          playerCount: d.playerCount,
+        };
+      });
+      setEventData(eventMap);
+
+      const historySnap = await getDocs(
+        query(
+          collection(db, "history"),
+          where("userId", "==", user.uid),
+          orderBy("createdAt", "desc")
+        )
+      );
+      setHistory(
+        historySnap.docs.map((docSnap) => {
+          const d = docSnap.data();
+          return {
+            id: docSnap.id,
+            type: d.type,
+            dateKey: d.dateKey,
+            status: d.status,
+            playerCount: d.playerCount,
+            timestamp: d.createdAt,
+          };
+        })
+      );
+    };
+
+    loadData();
+  }, [user]);
+
+  const logHistory = async (entry) => {
+    const docRef = await addDoc(collection(db, "history"), {
+      userId: user.uid,
+      type: entry.type,
+      dateKey: entry.dateKey,
+      status: entry.status || null,
+      playerCount: entry.playerCount ?? null,
+      createdAt: new Date().toISOString(),
+    });
+
     setHistory((prev) => [
-      { id: Date.now() + Math.random(), timestamp: new Date().toISOString(), ...entry },
+      {
+        id: docRef.id,
+        type: entry.type,
+        dateKey: entry.dateKey,
+        status: entry.status,
+        playerCount: entry.playerCount,
+        timestamp: new Date().toISOString(),
+      },
       ...prev,
     ]);
-  };
-
-  const handleSignUp = () => {
-    setSignedIn(true);
   };
 
   const handleSelectEvent = (event) => {
@@ -50,7 +118,17 @@ export default function App() {
     setScreen("eventDetail");
   };
 
-  const handleSaveEvent = (dateKey, roster, status, playerCount) => {
+  const handleSaveEvent = async (dateKey, roster, status, playerCount) => {
+    const docId = `${user.uid}_${dateKey}`;
+    await setDoc(doc(db, "events", docId), {
+      userId: user.uid,
+      dateKey,
+      roster,
+      status,
+      playerCount,
+      updatedAt: new Date().toISOString(),
+    });
+
     setEventData((prev) => ({
       ...prev,
       [dateKey]: { roster, status, playerCount },
@@ -59,8 +137,8 @@ export default function App() {
     setScreen("dashboard");
   };
 
-  const handleSignOut = () => {
-    setSignedIn(false);
+  const handleSignOut = async () => {
+    await auth.signOut();
     setSelectedEvent(null);
     setScreen("dashboard");
   };
@@ -69,12 +147,20 @@ export default function App() {
     setScreen(tabName === "History of Boss April" ? "history" : "dashboard");
   };
 
-  const handleClearHistory = () => {
+  const handleClearHistory = async () => {
+    const historySnap = await getDocs(
+      query(collection(db, "history"), where("userId", "==", user.uid))
+    );
+    await Promise.all(historySnap.docs.map((d) => deleteDoc(d.ref)));
     setHistory([]);
   };
 
-  if (!signedIn) {
-    return <Welcome onSignUp={handleSignUp} />;
+  if (loadingSession) {
+    return <div className="min-h-screen bg-gray-50" />;
+  }
+
+  if (!user) {
+    return <Welcome />;
   }
 
   if (screen === "eventDetail" && selectedEvent) {
