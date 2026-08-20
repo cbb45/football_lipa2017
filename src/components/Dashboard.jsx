@@ -141,7 +141,7 @@ function MonthRow({ month, isOpen, onToggle, onSelectEvent }) {
 export default function Dashboard({ eventData, onSelectEvent, onSignOut, onNavigate, activeTab }) {
   const [currentYear, setCurrentYear] = useState(2026);
   const [openMonth, setOpenMonth] = useState("August");
-  const navItems = ["Open Play Session", "Open Play Sessions", "History of Boss April"];
+  const navItems = ["Open Play Session","History of Boss April"];
 
   const months = buildMonths(currentYear, eventData);
 
