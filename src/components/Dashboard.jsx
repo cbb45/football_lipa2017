@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, Clock, MapPin, CheckCircle2, XCircle, Menu, X } from "lucide-react";
 import { getSaturdaysInMonth, toDateKey } from "../utils/dates";
+import { useState, useEffect } from "react";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -143,6 +144,35 @@ function MonthRow({ month, isOpen, onToggle, onSelectEvent }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const dateStr = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const timeStr = now.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  return (
+    <div className="text-center py-6 mt-8 border-t border-gray-100">
+      <p className="text-sm font-semibold text-red-600">Idol ni boss april si grant</p>
+      <p className="text-xs text-gray-500 mt-1">{dateStr}</p>
+      <p className="text-xs text-gray-400 font-mono">{timeStr}</p>
     </div>
   );
 }
