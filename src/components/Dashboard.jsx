@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, Clock, MapPin, CheckCircle2, XCircle, Menu, X } from "lucide-react";
 import { getSaturdaysInMonth, toDateKey } from "../utils/dates";
-import { useState, useEffect } from "react";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -157,10 +156,9 @@ function LiveClock() {
   }, []);
 
   const dateStr = now.toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
+    month: "short",
     day: "numeric",
+    year: "numeric",
   });
   const timeStr = now.toLocaleTimeString("en-US", {
     hour: "2-digit",
@@ -169,11 +167,9 @@ function LiveClock() {
   });
 
   return (
-    <div className="text-center py-6 mt-8 border-t border-gray-100">
-      <p className="text-sm font-semibold text-red-600">Idol ni boss april si grant</p>
-      <p className="text-xs text-gray-500 mt-1">{dateStr}</p>
-      <p className="text-xs text-gray-400 font-mono">{timeStr}</p>
-    </div>
+    <span className="text-xs text-gray-500 font-mono">
+      {dateStr} • {timeStr}
+    </span>
   );
 }
 
@@ -262,8 +258,15 @@ export default function Dashboard({ eventData, onSelectEvent, onSignOut, onNavig
       </aside>
 
       <main className="flex-1 p-4 sm:p-6 min-w-0">
-        <div className="flex items-center justify-between mb-6">
+                              <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Open Play</h1>
+          <div className="flex items-center gap-2 flex-wrap text-sm font-medium">
+            <span className="text-red-600">Idol ni boss april si grant</span>
+            <span className="text-gray-300">|</span>
+            <span className="text-gray-500">
+              <LiveClock />
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -283,7 +286,7 @@ export default function Dashboard({ eventData, onSelectEvent, onSignOut, onNavig
           </span>
         </div>
 
-               <div className="w-full">
+        <div className="w-full">
           {months.map((month) => (
             <MonthRow
               key={month.name}
