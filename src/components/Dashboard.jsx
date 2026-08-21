@@ -261,7 +261,7 @@ export default function Dashboard({ eventData, onSelectEvent, onSignOut, onNavig
                               <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Open Play</h1>
           <div className="flex items-center gap-2 flex-wrap text-sm font-medium">
-            <span className="text-red-600">Welcome Lebron James</span>
+            <span className="text-red-600">April Lang MALAKAS...pag TULOG</span>
             <span className="text-gray-300">|</span>
             <span className="text-gray-500">
               <LiveClock />
