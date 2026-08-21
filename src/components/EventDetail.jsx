@@ -16,6 +16,39 @@ function generateDefaultRoster() {
   };
 }
 
+const TEAM_COUNTS = {
+  "Chill Open Play": 6,
+  "Competitive Open Play": 10,
+};
+
+function normalizeRoster(roster) {
+  if (!roster) return generateDefaultRoster();
+
+  return {
+    groups: roster.groups.map((group) => {
+      const targetCount = TEAM_COUNTS[group.name] ?? group.teams.length;
+      let teams = group.teams.map((team) => {
+        const players = [...team.players];
+        while (players.length < 7) {
+          players.push("");
+        }
+        return { ...team, players: players.slice(0, 7) };
+      });
+
+      while (teams.length < targetCount) {
+        teams.push({
+          name: "Team",
+          players: Array.from({ length: 7 }, () => ""),
+        });
+      }
+
+      teams = teams.slice(0, targetCount);
+
+      return { ...group, teams };
+    }),
+  };
+}
+
 function TeamColumn({ team, onNameChange, onPlayerChange }) {
   return (
     <div>
@@ -68,8 +101,79 @@ function GroupSection({ group, onTeamNameChange, onPlayerChange }) {
   );
 }
 
+function generateMatchups(teams, order) {
+  const ordered = order.map((i) => teams[i]);
+  const matches = [];
+
+  for (let i = 0; i < ordered.length; i += 2) {
+    const home = ordered[i];
+    const away = ordered[i + 1];
+    matches.push({
+      home: home?.name?.trim() || `Team ${i + 1}`,
+      away: away ? (away.name?.trim() || `Team ${i + 2}`) : null,
+    });
+  }
+
+  return matches;
+}
+
+function shuffleArray(arr) {
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+function GameSequencer({ group }) {
+  const [order, setOrder] = useState(() => group.teams.map((_, i) => i));
+
+  const matches = generateMatchups(group.teams, order);
+
+  const handleShuffle = () => {
+    setOrder((prev) => shuffleArray(prev));
+  };
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <span className="font-semibold text-gray-800 text-sm">
+          {group.name} — Game Sequence
+        </span>
+        <button
+          onClick={handleShuffle}
+          className="text-xs font-medium text-red-600 border border-red-200 rounded-full px-3 py-1 hover:bg-red-50 transition-colors"
+        >
+          Shuffle
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {matches.map((match, i) => (
+          <div
+            key={i}
+            className="border border-gray-100 rounded-lg px-3 py-2 bg-gray-50"
+          >
+            <p className="text-xs text-gray-400 mb-1">Game {i + 1}</p>
+            {match.away ? (
+              <p className="text-sm font-medium text-gray-800">
+                {match.home} <span className="text-red-500">vs</span> {match.away}
+              </p>
+            ) : (
+              <p className="text-sm font-medium text-gray-500">
+                {match.home} <span className="text-gray-400">— Bye</span>
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function EventDetail({ event, roster: savedRoster, status: savedStatus, onBack, onSave, onSignOut, onNavigate, activeTab }) {
-  const [roster, setRoster] = useState(savedRoster || generateDefaultRoster());
+  const [roster, setRoster] = useState(() => normalizeRoster(savedRoster));
   const [status, setStatus] = useState(savedStatus || "scheduled");
   const navItems = ["Open Play Session", "History of Boss April"];
 
@@ -167,6 +271,10 @@ export default function EventDetail({ event, roster: savedRoster, status: savedS
               updatePlayer(groupIndex, teamIndex, playerIndex, value)
             }
           />
+        ))}
+
+        {roster.groups.map((group) => (
+          <GameSequencer key={`sequence-${group.name}`} group={group} />
         ))}
       </main>
     </div>
