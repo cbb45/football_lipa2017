@@ -2,16 +2,16 @@ import { useState } from "react";
 import { ChevronUp, ChevronDown } from "lucide-react";
 
 function generateDefaultRoster() {
-  const makeTeams = () =>
-    Array.from({ length: 6 }, () => ({
+  const makeTeams = (count) =>
+    Array.from({ length: count }, () => ({
       name: "Team",
-      players: ["", "", "", "", ""],
+      players: Array.from({ length: 7 }, () => ""),
     }));
 
   return {
     groups: [
-      { name: "Chill Open Play", teams: makeTeams() },
-      { name: "Competitive Open Play", teams: makeTeams() },
+      { name: "Chill Open Play", teams: makeTeams(6) },
+      { name: "Competitive Open Play", teams: makeTeams(10) },
     ],
   };
 }
@@ -67,6 +67,7 @@ function GroupSection({ group, onTeamNameChange, onPlayerChange }) {
     </div>
   );
 }
+
 export default function EventDetail({ event, roster: savedRoster, status: savedStatus, onBack, onSave, onSignOut, onNavigate, activeTab }) {
   const [roster, setRoster] = useState(savedRoster || generateDefaultRoster());
   const [status, setStatus] = useState(savedStatus || "scheduled");
@@ -107,7 +108,7 @@ export default function EventDetail({ event, roster: savedRoster, status: savedS
           <img src="/logo.png" alt="Football Lipa" className="h-8 w-8 object-contain" />
           <span className="font-bold text-gray-800">Football Lipa</span>
         </div>
-                <nav className="space-y-1 flex-1">
+        <nav className="space-y-1 flex-1">
           {navItems.map((item) => (
             <button
               key={item}
@@ -135,24 +136,24 @@ export default function EventDetail({ event, roster: savedRoster, status: savedS
           <h1 className="text-xl font-bold text-gray-900">
             {event.title} — {formattedDate}
           </h1>
-                       <button
-              onClick={() => {
-                const playerCount = roster.groups.reduce(
-                  (groupTotal, group) =>
-                    groupTotal +
-                    group.teams.reduce(
-                      (teamTotal, team) =>
-                        teamTotal + team.players.filter((p) => p.trim() !== "").length,
-                      0
-                    ),
-                  0
-                );
-                onSave(event.id, roster, status, playerCount);
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-6 py-2 rounded-lg"
-            >
-              Save
-            </button>
+          <button
+            onClick={() => {
+              const playerCount = roster.groups.reduce(
+                (groupTotal, group) =>
+                  groupTotal +
+                  group.teams.reduce(
+                    (teamTotal, team) =>
+                      teamTotal + team.players.filter((p) => p.trim() !== "").length,
+                    0
+                  ),
+                0
+              );
+              onSave(event.id, roster, status, playerCount);
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-6 py-2 rounded-lg"
+          >
+            Save
+          </button>
         </div>
 
         {roster.groups.map((group, groupIndex) => (
